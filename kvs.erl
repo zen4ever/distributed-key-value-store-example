@@ -155,7 +155,7 @@ message_retrieved(Store = #kvs_store{pending_reads=Reads}, _Sender, Client, Key,
 	    [{Popular, _} | _ ] = lists:reverse(lists:keysort(2, Freq)),
 	    Client ! {self(), got, Popular},
 	    store(Store#kvs_store{
-		    pending_reads=proplists:delete({Key, Value}, Reads)});
+		    pending_reads=proplists:delete({Client, Key}, Reads)});
 	{Count, Values, Timestamp} ->
 	    store(Store#kvs_store{
 		    pending_reads=[{{Client, Key}, {Count-1, [Value | Values], Timestamp}} |
@@ -177,15 +177,14 @@ message_update(Store = #kvs_store{data=Data}, Sender, Client, Key, Value) ->
     store(Store#kvs_store{data=[{Key, Value} | proplists:delete(Key, Data)]}).
 
 message_updated(Store = #kvs_store{pending_writes=Writes}, _Sender, Client, Key, Value) ->
-    {Count, Timestamp} = proplists:get_value({Client, Key}, Writes),
-    case Count of
+    case proplists:get_value({Client, Key}, Writes) of
 	undefined ->
 	    store(Store);
-	0 ->
+	{0, _Timestamp} ->
 	    Client ! {self(), received, {set, Key, Value}},
 	    store(Store#kvs_store{
-		    pending_writes=proplists:delete({Key, Value}, Writes)});
-	_ ->
+		    pending_writes=proplists:delete({Client, Key}, Writes)});
+	{Count, Timestamp} ->
 	    store(Store#kvs_store{
 		    pending_writes=[{{Client, Key}, {Count-1, Timestamp}} |
 				    proplists:delete({Client, Key}, Writes)]})
